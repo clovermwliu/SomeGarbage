@@ -1,0 +1,93 @@
+说起控件双击，我们立刻会想到解决办法， onClick(view) 中针对点击间隔做判断，并且忽略第二次点击。
+因此有两个办法：
+
+1. 在每个onClick中单独处理
+2. 定义类 implement View.OnClickListener
+
+直接贴代码：
+
+ onClick处理
+
+    view.setOnClickListener(new OnClickListener() {
+        public void onClick(View v) {
+            return ifClickTooFast();
+        }
+    })
+
+定义新的基类
+
+    class BaseClickListener implements View.OnClickListener {
+        public void onClick(View v) {
+            return ifClickTooFast();
+            
+            doClick(v);
+        }
+        abstrace public void doClick(View v) ;
+    }
+    
+    view.setOnClickListener(new BaseClickListener() {
+        public void doClick(View v) {
+            ... //more code
+        }
+    })
+
+两种办法都可以做，但是都有弊端
+
+1. 第一种办法业务复杂
+2. 第二种办法无法处理Java不能多继承的问题
+
+这里我来介绍第三种新办法，先贴代码
+
+使用Java动态代理来防止双击
+
+    public class ClickUtil {
+    
+        /**
+         * 获取一个对象
+         * @param listenerImpl
+         * @return
+         */
+        public static View.OnClickListener wrapper(final View.OnClickListener listenerImpl) {
+    
+            //生成handler
+            InvocationHandler handler =  new InvocationHandler() {
+                private long lastClickTime = 0; //上一次click时间
+    
+                @Override
+                public Object invoke(Object o, Method method, Object[] objects) throws Throwable {
+                    long current = System.currentTimeMillis();
+    
+                    if (current - lastClickTime > 1000) {
+                        //2秒执行一次
+                        lastClickTime = current;
+                        return method.invoke(listenerImpl, objects);
+                    }
+                    return null;
+                }
+            };
+    
+            //生成listener代理
+            return  (View.OnClickListener) Proxy.newProxyInstance(
+                    handler.getClass().getClassLoader()
+                    , new Class[]{View.OnClickListener.class}
+                    , handler);
+    
+        }
+    }
+    
+    //调用
+    view.setOnClickListener(ClickUtil.wrapper(new onClickListener() {
+        public void onClick(View v){
+            ... //more code
+        }
+    }))
+    view2.setOnClickListener(ClickUtil.wrapper(this))
+
+使用动态代理，可以再不侵入onClick处理代码的前提下，解决上面说的两个问题。
+
+
+
+最后欢迎大家关注我的微信公众号: 
+
+![qrcode_for_gh_57f10bd361d3_258-2](https://ws3.sinaimg.cn/large/006tNbRwgy1fv94c1mavmj3076076jru.jpg)
+
